@@ -87,6 +87,8 @@ parser.add_argument('-fps', '--frame-rate', metavar="FPS", dest="frame_rate", ty
 parser.add_argument('--sample-rate', metavar="rate", dest="sample_rate", type=float, default=0, help="sample rate of the input and output videos")
 parser.add_argument('-q', '--frame-quality', metavar="quality", dest="frame_quality", type=int, default=3, help="quality of frames to be extracted from input video. 1 is highest, 31 is lowest, 3 is the default.")
 parser.add_argument('-audio', '--audio-only', default=False, action="store_true", dest="audio_only")
+parser.add_argument('-t', '--threads', default=1, type=int, dest="threads", help="number of threads being used.")
+parser.add_argument('-tmp', '--temp-folder', default="TEMP", dest="tmp_dir", help="directory for temporary files.")
 
 args = parser.parse_args()
 
@@ -105,7 +107,7 @@ AUDIO_ONLY = args.audio_only
 
 OUTPUT_FILE = args.output_file if args.output_file else inputToOutputFilename(INPUT_FILE, OUTPUT_FORMAT)
 
-TEMP_FOLDER = "TEMP"
+TEMP_FOLDER = args.tmp_dir
 AUDIO_FADE_ENVELOPE_SIZE = 400  # smooth out transition's audio by quickly fading in/out (arbitrary magic number whatever)
 
 createPath(TEMP_FOLDER)
@@ -126,13 +128,13 @@ if not AUDIO_ONLY:
         raise ValueError("Invalid framerate, check your options or video or set manually (0 or below)")
 
 if not AUDIO_ONLY:
-    command = "ffmpeg -i '{0}' {1} -hide_banner -loglevel {2} -stats -qscale:v {3}" \
-        .format(INPUT_FILE, os.path.join(TEMP_FOLDER, "frame%06d.jpg"), LOG_LEVEL, str(FRAME_QUALITY))
+    command = "ffmpeg -i '{0}' {1} -hide_banner -loglevel {2} -stats -qscale:v {3} -threads {4}" \
+        .format(INPUT_FILE, os.path.join(TEMP_FOLDER, "frame%06d.jpg"), LOG_LEVEL, str(FRAME_QUALITY), args.threads)
     run(command, check=True, shell=True)
 
 
-command = "ffmpeg -i '{0}' -hide_banner -loglevel {1} -stats -ab 160k -ac 2 -ar {2} -vn {3}"\
-    .format(INPUT_FILE, LOG_LEVEL, str(SAMPLE_RATE), os.path.join(TEMP_FOLDER, "audio.wav"))
+command = "ffmpeg -i '{0}' -hide_banner -loglevel {1} -stats -ab 160k -ac 2 -ar {2} -vn {3} -threads {4}"\
+    .format(INPUT_FILE, LOG_LEVEL, str(SAMPLE_RATE), os.path.join(TEMP_FOLDER, "audio.wav"), args.threads)
 run(command, check=True, shell=True)
 
 sampleRate, audioData = wavfile.read(os.path.join(TEMP_FOLDER, "audio.wav"))
@@ -218,9 +220,9 @@ wavfile.write(os.path.join(TEMP_FOLDER, "audioNew.wav"), SAMPLE_RATE, outputAudi
 #     copyFrame(int(audioSampleCount/samplesPerFrame)-1,endGap)
 
 if not AUDIO_ONLY:
-    command = "ffmpeg -hide_banner -loglevel {0} -stats -framerate {1} -i {2} -i {3} -strict -2 '{4}'" \
+    command = "ffmpeg -hide_banner -loglevel {0} -stats -framerate {1} -i {2} -i {3} -strict -2 '{4}' -threads {5}" \
         .format(LOG_LEVEL, str(FRAME_RATE), os.path.join(TEMP_FOLDER, "newFrame%06d.jpg"),
-                os.path.join(TEMP_FOLDER, "audioNew.wav"), OUTPUT_FILE)
+                os.path.join(TEMP_FOLDER, "audioNew.wav"), OUTPUT_FILE, args.threads)
     if FILE_OVERWRITE: command += " -y"
     try:
         run(command, check=True, shell=True)
